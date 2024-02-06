@@ -1,7 +1,8 @@
 {
-  "arrowParens": "avoid",
+  "arrowParens": "always",
   "semi": true,
-  "tabWidth": 2,
+  "tabWidth": 4,
+  "useTabs": true,
   "printWidth": 80,
   "singleQuote": false,
   "jsxSingleQuote": false,

@@ -1,0 +1,483 @@
+---
+title: La génération procédurale de The Binding of Isaac
+slug: la-generation-procedurale-de-the-binding-of-isaac
+pubDatetime: 2022-06-08
+featured: false
+tags:
+    - procedural-generation
+    - unity
+    - french
+    - sae
+description: Explication de l'algorithme de génération de donjon dans
+    The Binding of Isaac et implémentation sur Unity
+---
+
+Dans le jeu que nous avons fait Némoz et moi, nous avons décidé d'utiliser deux types de génération procédurale :
+
+1. La Wave Function Collapse (Effondrement de la Fonction d'onde, regardez cette vidéo pour en savoir plus : [Superpositions, Sudoku, the Wave Function Collapse algorithm. - YouTube](https://www.youtube.com/watch?v=2SuvO4Gi7uY))
+2. Une génération de donjons à la _The Binding of Isaac_.
+
+Ici, je vais vous parler de comment j'ai créé cette génération de donjons. Premièrement, je parlerais des principes globaux permettant qu'une génération de ce type puisse être implémentée dans n'importe quel environnement de programmation. Puis, je parlerais de comment je l'ai créé de manière concrète dans Unity.
+
+Les exemples de code que je présente sont écrits en C#, mais il est possible de les reproduire dans n'importe quel langage.
+
+## Pourquoi choisir une génération de ce style
+
+La génération d'Isaac est basée sur un concept très simple, mais qui pourtant donne de très bons résultats, d'où mon envie de l'utiliser.
+
+![isaac screenshot](/src/assets/images/isaac-proc-gen/2022-05-24-22-57-27-.jpg)
+
+De plus, la plus grande inspiration d'Isaac est le premier _The Legend of Zelda_, notamment ses donjons.
+
+![mapZelda](/src/assets/images/isaac-proc-gen/zeldaMap.png)
+
+## Fonctionnement de la génération procédurale d'Isaac
+
+Pour commencer, il faut préciser que je me base sur le premier _The Binding of Isaac_ et pas sur son remake _The Binding of Isaac : Rebirth_. La génération ne contient donc que des salles de taille 1x1 qui remplissent l'écran. Elles sont aussi disposées sur une grille, ce qui facilite grandement la génération du donjon.
+
+### Génération du plan du niveau
+
+Premièrement, il faut une représentation du donjon dans la mémoire. Cela peut se faire de plusieurs manières, avec un tableau 2D de `int` par exemple. Ou, si on veut plus de contrôle, des `enums`. Personnellement, j'ai décidé d'utiliser une classe. Cela me permet de stocker le voisinage de la pièce ainsi que d'autres informations utiles plus tard.
+
+```csharp
+Room[,] dungeon = new Room[Size.Width, Size.Height];
+```
+
+Par contre, comme on utilise un tableau, il faut lui définir une taille qui soit assez grande pour pour le nombre de salle que nous voulons créer. Lors de la création du donjon, il faut alors faire attention à ne pas demander plus de salle que `Size.Width * Size.Height`.
+
+Dans Isaac, le nombre de salle est décidé avec l'équation :
+
+```csharp
+int numberOfRooms = Random.Range(0, 2) + 5 + (int) (level * 2.6);
+```
+
+Ce qui fait qu'on commence avec 7 ou 8 salles puis, le nombre augmentes de 2 ou 3 salles à chaque niveau.
+
+L'étape suivante est de décider d'un point de départ. Le mieux est d'utiliser le centre du tableau, car nous allons nous diriger dans toutes les directions autour de cette case.
+
+![PositionOfCenterGrid](/src/assets/images/isaac-proc-gen/GridCenterDiagram.png)
+
+Ensuite, on ajoute cette pièce dans une queue, sur laquelle on itère.
+
+```csharp
+Room startRoom = new Room(x: Size.Width / 2, y: Size.Height / 2);
+var queue = new Queue<Room>();
+while (queue.Count > 0)
+{
+    Room room = queue.Dequeue();
+    // Faire des trucs sur la room
+}
+```
+
+Voici ce qu'on fait sur notre pièce :
+
+1. Itérer sur toutes les pièces voisines (haut, bas, gauche, droite)
+
+2. Si la pièce est hors limite ou occupée, abandonner
+
+3. Si la pièce a plus d'une voisine, abandonner
+
+4. Si on a atteint le nombre de pièces max, abandonner
+
+5. Il y a 50% de chance d'abandonner
+
+6. Sinon, marquer la pièce comme étant existante et l'ajouter a la queue
+
+Si la pièce n'a pas ajouté de voisin, on peut la mettre dans une liste de pièces de fin, qu'on utilisera plus tard.
+
+![RulesOfTheGrid](/src/assets/images/isaac-proc-gen/GridRulesDiagram.png)
+
+Comme le mentionne Boris dans son article, cette façon de commencer avec une pièce et de s'étendre autour d'elle, est une sorte de BFS (ou selon les termes de l'article : Breadth First Exploration).
+
+À la fin, on peut regarder le dernier élément de la liste de pièces de fin et la définir comme salle de boss. Comme elle se trouve à la fin de la liste, on sait que c'est la salle la plus éloignée de la case de départ.
+
+Finalement, si le nombre de salles n'est pas celui demandé, on recommence jusqu'à ce qu'on ait le bon nombre de salles.
+
+Normalement, dans Isaac, les salles de fin sont utilisées afin d'en faire des salles spéciales comme les shops ou les items room.
+
+### Les salles normales
+
+Une fois que le plan du niveau est généré, il faut choisir des salles qui vont s'appliquer pour chaque cellule de notre tableau. Pour ce faire, lors de la génération, j'ai stocké les voisins de chaque salle dans la classe `Room`. Ce qui permet de choisir une salle en fonction (par exemple, il faut faire attention de bien choisir une salle qui a une porte ne haut et une porte à gauche si elle possède des voisins dans ces directions).
+
+![sallePorte](/src/assets/images/isaac-proc-gen/sallePorte.png)
+
+Il y a plusieurs salles par type de voisinage, ce qui permet de choisir parmi une liste aléatoire.
+
+## Implémentation dans Unity
+
+### La classe Room
+
+La première chose à faire, est de créer une classe qui permet de représenter nos salles.
+
+```csharp
+[Serializable]
+public class Room
+{
+    public Neighborhood Neighborhood;
+
+    [field: SerializeField] public RoomType Type { get; set; }
+    [field: SerializeField] public Vector2Int Pos { get; private set; }
+    [field: SerializeField] public SceneReference Scene { get; set; }
+    [field: SerializeField] public bool IsFinished { get; set; } = false;
+}
+```
+
+RoomType est un enum qui contient le type de salle que c'est.
+
+```csharp
+public enum RoomType
+{
+    Empty = 0, // No room
+    Basic, // Normal room
+    Start, // Spawn point of the player
+    Final, // End and/or boss room
+}
+```
+
+La SceneReference est la scène qui possède la représentation concrète de notre salle. Elle sera chargée en mode additif (j'expliquerais ceci plus en détail plus tard).
+
+Le booléen `IsFinished` indique si tous les ennemis de la salle ont été battus.
+
+Enfin, `Neighborhood` est un struct qui contient des informations sur le voisinage de la salle.
+
+```csharp
+[Serializable]
+public struct Neighborhood
+{
+    [field: SerializeField] public bool Top { get; set; }
+    [field: SerializeField] public bool Bottom { get; set; }
+    [field: SerializeField] public bool Left { get; set; }
+    [field: SerializeField] public bool Right { get; set; }
+
+    public int Count => (Top ? 1 : 0) + (Bottom ? 1 : 0) +
+    (Left ? 1 : 0) + (Right ? 1 : 0);
+
+    public NeighborhoodType Type
+    {
+        get
+        {
+            // Retourner le bon enum selon le voisinage
+        }
+    }
+}
+
+```
+
+Premièrement, nous avons des booléens qui indiquent la présence de voisin ou non.
+
+Ensuite, la propriété calculée `Count` donne le nombre de voisins de la salle.
+
+Pour finir, nous avons un enum qui indique le type de voisinage de la salle. Celui-ci contient des valeurs comme :
+
+```csharp
+public enum NeighborhoodType
+{
+    None = 0,
+    Bottom,
+    BottomLeft,
+    BottomLeftRight,
+    // ...
+}
+```
+
+### Création des rooms dans leur scène
+
+Maintenant que nous avons une représentation de notre room dans le code, nous allons lui faire une représentation "concrète".
+
+![layoutScene](/src/assets/images/isaac-proc-gen/layoutScene.png)
+
+Une scène d'une salle est constituée de :
+
+-   **Une grille** : contient la tilemap, donc la représentation visuelle, de la salle
+
+-   **Les portes** : sont ou ne sont pas activée selon les portes présentes, elles s'occupent du passage entre les salles.
+
+-   **La Room Behaviour** : contient le script qui va gérer notre salle (j'en parlerais juste après.)
+
+-   **Les Spawners** : s'occupent de faire apparaître les monstres. Je n'entrerais pas en détail sur le sujet dans ce blog post.
+
+Voici à quoi ressemble le script `RoomBehaviour` :
+
+```csharp
+public class RoomBehaviour : MonoBehaviour
+{
+    // Scriptable object qui contient l'évenement de spawn des enemis
+    [SerializeField] private SpawnEventScriptableObject spawnEvent;
+
+    // Scriptable object qui compte le nombre d'énemis en vie dans la salle
+    [SerializeField] private DungeonEnemiesCountScriptableObject dungeonEnemiesCount;
+
+    // Nombre de spawners dans la salle
+    private int spawnerCount;
+
+    // Indique si la salle possède des enemis.
+    // Nécéssaire afin de ne pas lancer l'invoquation d'enemis s'il n'y en a pas
+    [field: SerializeField] public bool HasEnemies { get; set; }
+
+    private void Awake()
+    {
+        // Trouver tous les spawners de la scène et les compter
+        MonsterSpawner[] spawners = FindObjectsOfType<MonsterSpawner>();
+        spawnerCount = spawners.Length;
+    }
+
+    // Ajoute d'une fonction a l'évenement de spawn des enemis
+    private void OnEnable()
+    {
+        if (spawnEvent != null)
+            spawnEvent.OnSpawnEnemies += OnSpawnEnemies;
+    }
+
+    private void OnDisable()
+    {
+        if (spawnEvent != null)
+            spawnEvent.OnSpawnEnemies -= OnSpawnEnemies;
+    }
+
+    private void OnSpawnEnemies()
+    {
+        // Set le nombre d'enemis sur le scriptable object seulement s'il y en a dans la salle
+        if (HasEnemies && spawnerCount > 0)
+        {
+            dungeonEnemiesCount.EnemiesCount = spawnerCount;
+        }
+    }
+}
+```
+
+### La génération du donjon
+
+Premièrement, nous allons regarder la scène qui va contenir notre donjon. Comme vu précédemment, les salles sont des scènes qui sont chargées additivement. Pour que cela soit possible, il faut une scène de "base" dans laquelle ces salles seront chargées. Dans ce cas, la scène "**Dungeon**".
+
+![dungeonScene](/src/assets/images/isaac-proc-gen/dungeonScene.png)
+
+Ce qui nous intéresse dans cette scène c'est :
+
+-   **TP Points** : les points ou le joueur sera téléporté quand il traverse une porte.
+
+-   **Dungeon Manager** : script qui s'occupe de gérer le donjon en général.
+
+Voici ce qui compose le `DungeonManager` :
+
+```csharp
+// Script qui s'occupe de générer le donjon
+[SerializeField] private DungeonGenerator dungeonGenerator;
+
+// Paramètres de génération du donjon
+[Foldout("Settings", true)]
+[SerializeField] private bool randomSeed = true;
+[ConditionalField(nameof(randomSeed), true)] [SerializeField]
+private int seed = 7;
+[SerializeField] private int baseNumberOfRooms = 12;
+```
+
+Pour commencer, il va utiliser un autre script afin de générer le donjon.
+
+Ensuite, il possède une référence à chaque scène de salle :
+
+```csharp
+[Foldout("Room Scenes", true)]
+[SerializeField] private SceneReference[] b;
+[SerializeField] private SceneReference[] bl;
+[SerializeField] private SceneReference[] blr;
+// ...
+```
+
+Celle qui se trouve à l'index 0 est toujours une salle vide afin de pouvoir l'utiliser en tant que point de départ du joueur.
+
+Ce script s'occupe aussi de stocker le donjon ainsi que la salle dans laquelle le joueur est actuellement.
+
+```csharp
+private Room[,] dungeon;
+private Room currentRoom;
+```
+
+Pour ce qui est du comportement, voici la méthode `Start()` :
+
+```csharp
+private void Start()
+{
+    if (!randomSeed)
+        Random.InitState(seed);
+    dungeonGenerator.NumberOfRooms = Random.Range(0, 2) + baseNumberOfRooms + (int) (Level * 2.6);
+    // Génère le donjon dans notre tableau 2D
+    GenerateDungeonMap();
+
+    // Ajoute les SceneReference a chaque salle
+    FillScenesInDungeon();
+
+    // Charge la salle qui est du type RoomType.Start
+    LoadStartScene();
+}
+```
+
+Je ne vais pas entrer en détail sur les méthodes `FillScenesInDungeon()` et `LoadStartScene()` pour l'instant car il suffit de choisir une scène aléatoirement qui colle aux voisins de la pièce, et je parlerais du chargement de salles plus tard. Je vais donc parler de la génération du donjon. La méthode `GenerateDungeonMap()` ne fait qu'appeller la méthode `Generate()` du `DungeonGenerator`.
+
+Le Dungeon Generator a différents paramètres :
+
+```csharp
+// Taille du tableau qui contient le donjon
+[field: SerializeField] public Size Size { get; set; } = new(10, 10);
+
+// Nombre de salle que l'on veut dans le donjon
+[field: SerializeField] public int NumberOfRooms { get; set; } = 10;
+
+// Chances d'abandonner lors de la création d'une salle
+[field: SerializeField, Range(0, 1)] public float ChanceToGiveUp { get; set; } = 0.5f;
+
+// Pourcentage maximal de remplissage du tableau
+[field: SerializeField, Range(0, 1)] public float FillPercentage { get; set; } = 0.8f;
+
+// Nombre maximum de salles dans le donjon
+public int MaxNumberOfRooms => Mathf.FloorToInt(Size.Width * Size.Height * FillPercentage);
+```
+
+Voici comment la méthode `Generate()` fonctionne :
+
+```csharp
+public Room[,] Generate()
+{
+    var rooms = new Room[Size.Width, Size.Height];
+    if (NumberOfRooms > MaxNumberOfRooms)
+    {
+        NumberOfRooms = MaxNumberOfRooms;
+        Debug.LogWarning($"Too many rooms for the size of the map. (Max : {MaxNumberOfRooms})");
+    }
+
+    int count;
+    do
+    {
+        GenerateDungeon(rooms);
+        count = rooms.Cast<Room>().Count(room => !IsRoomEmpty(room));
+    } while (count != NumberOfRooms);
+    return rooms;
+}
+```
+
+La méthode `GenerateDungeon()` ne permet pas de garantir le nombre de salles, ce qui fait que la génération s'execute en boucle jusqu'à ce que le nombre de salles soit atteint. Cela n'impacte pas trop les performances comme le tout est suffisamment rapide.
+
+Parlons maintenant de comment `GenerateDungeon()` marche. Voici son début :
+
+```csharp
+// On vide le tableau de salles
+EmptyRooms(rooms);
+
+// On créer la queue qui vas nous permetre d'itérer sur les rooms
+var roomQueue = new Queue<Room>();
+
+// Liste qui permet de garder les salles qui n'ont pas de voisins dans un coin
+var endRooms = new List<Room>();
+
+// Fonction qui permet de simplifier l'ajout de salles dans la queue
+void AddRoom(Room room)
+{
+    rooms[room.Pos.x, room.Pos.y] = room;
+    roomQueue.Enqueue(room);
+}
+
+// Génération de la room de départ
+var startPos = new Vector2Int(Size.Width / 2, Size.Height / 2);
+var startRoom = new Room(RoomType.Start, startPos);
+AddRoom(startRoom);
+```
+
+Ensuite, on itère sur chaque salle de la queue et on applique les règles mentionnées dans la première partie de ce blog post :
+
+```csharp
+while (roomQueue.Count > 0)
+{
+    Room room = roomQueue.Dequeue();
+    var addCount = 0;
+    for (int x = -1; x <= 1; x++)
+    {
+        for (int y = -1; y <= 1; y++)
+        {
+            if (!IsValidOffset(x, y)) continue;
+            int roomCount = rooms.Cast<Room>().Count(r => !IsRoomEmpty(r));
+            if (roomCount >= NumberOfRooms) continue;
+            var neighborPos = new Vector2Int(room.Pos.x + x, room.Pos.y + y);
+            if (IsOutOfBounds(Size, neighborPos.x, neighborPos.y)) continue;
+            Room neighborRoom = rooms[neighborPos.x, neighborPos.y];
+            if (!IsRoomEmpty(neighborRoom)) continue;
+            if (HasMoreThanOneFilledNeighbor(rooms, neighborPos)) continue;
+            if (Random.Range(0f, 1f) <= ChanceToGiveUp) continue;
+
+            addCount++;
+            var newRoom = new Room(RoomType.Basic, neighborPos);
+            AddRoom(newRoom);
+
+            // Met a jour le voisinage de la nouvelle salle
+            UpdateNeighbor(rooms, newRoom);
+        }
+    }
+    if (addCount == 0)
+    {
+        endRooms.Add(room);
+    }
+}
+
+// La dernière des "endRooms" est celle qui est le plus loin du départ
+// on la défini donc comme salle finale
+endRooms.Last().Type = RoomType.Final;
+```
+
+### Changement de salle
+
+La dernière chose dont je vais parler dans ce blog post est le changement de salle.
+
+Nous avons déjà vu que dans chaque salle, j'ai placé des portes qui possèdent des colliders. Celles-ci invoquent un événement qui se trouve sur un **Scriptable Object** auquel le `DungeonManager` est inscrit. Voici à quoi ressemble le code d'ouverture de porte :
+
+```csharp
+private void OnOpenDoor(Direction direction)
+{
+    // Unload the old room
+    currentRoom.Scene.UnloadSceneAsync();
+
+    // Get the position of the new room
+    Vector2Int newPos = currentRoom.Pos + DirectionUtils.GetDirectionVector(direction);
+
+    // Load the new room
+    LoadRoom(dungeon[newPos.x, newPos.y]);
+    TeleportPlayer(direction);
+}
+```
+
+Premièrement, nous "unloadons" la scène active de manière asynchrone. Pendant que cela se fait, la position dans le tableau de la prochaine salle est calculée, puis nous la chargeons. Enfin, le joueur est téléporté à la position de la porte d'entrée dans la pièce.
+
+Regardons plus en détail la méthode `LoadRoom()` :
+
+```csharp
+private void LoadRoom(Room room)
+{
+    if (room == null)
+    {
+        this.LogError("Tried to load a null room.");
+        return;
+    }
+
+    room.Scene.LoadSceneAsync(LoadSceneMode.Additive).completed += _ =>
+    {
+        room.Scene.SetActive();
+        currentRoom = room;
+
+        path.Scan(); // For the pathfinding library we use
+
+        if (!room.IsFinished)
+        {
+            spawnEvent.SpawnEnemies();
+        }
+    };
+}
+```
+
+D'abord, on vérifie que la room n'est pas `null`, puis sa scène est chargée de manière asynchrone. Une fois le chargement finalisé, la scène de la room est mise comme active et `currentRoom` est mis à jour. Enfin, si la salle n'est pas finie, on appelle l'événement qui se trouve sur un **Scriptable Object** afin de faire spawner les ennemis.
+
+## Conclusion
+
+Voici globalement comment la génération d'un donjon a la _The Binding of Isaac_ marche. Dans ce blog post, j'ai mentionné le fonctionnement global de l'algorithme ainsi qu'un exemple d'implémentation dans _Unity_. Celle-ci est plutôt simple et pourrait être étendue de bien des manières comme, par exemple, ajouter des salles spéciales aux salles de fin qui se trouvent dans la liste (item room, curse room, etc).
+
+## Sources
+
+-   [Dungeon Generation in Binding of Isaac - BorisTheBrave.Com](https://www.boristhebrave.com/2020/09/12/dungeon-generation-in-binding-of-isaac/)
+
+-   [Binding of Isaac: Room Generation Explained! - YouTube](https://www.youtube.com/watch?v=1-HIA6-LBJc)

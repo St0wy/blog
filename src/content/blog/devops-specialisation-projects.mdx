@@ -1,0 +1,185 @@
+---
+title: "DevOps in Specialisation Projects"
+slug: devops-in-specialisation-projects
+pubDatetime: 2024-02-09
+featured: false
+tags:
+    - devops
+    - project-vr
+    - specialisation-projects
+    - english
+    - sae
+description: Presentation of how I set up the self-hosted tools that we used in the production of the two games we made for the specialisation projects.
+---
+
+During the 3rd year of my studies at SAE Institute, we were tasked to work on two Unreal Engine 5 games that would be done in collaboration with the Audio and Game Art sections.
+This is called the Specialisation Projects, since for the other sections it's the occasion to specialise themselves in their field.
+As for the programmers, we mostly did any tasks that had to be done for the games.
+
+In this blog post, I will present the work I did to setup part of the production pipeline, specifically the self-hosted tools.
+
+## Table of Contents
+
+## DevOps ?
+
+What I will talk about in this blog post is not really DevOps; it's more about the tools I setup in my home server for the production of the Specialisation Projects.
+It's just the name we gave to this task, even though it doesn't fit the real definition of DevOps.
+
+## The Server
+
+For these projects, we (the students) are usually supposed to host the tools on a server that's inside the school.
+But unfortunately, when we started the projects, the WiFi at school wasn't working, so we couldn't do that.
+So that we weren't stuck, I decided that we could instead host everything on my old gaming computer at home.
+But since it was supposed to be a temporary solution, I though it would be faster to set up a GitLab instance, instead of Perforce.
+We were also supposed to use [Jira](https://www.atlassian.com/fr/software/jira), but we didn't know if we could get a license, and if we could get it working on my server.
+So we also decided to use an alternative : [Trello](https://trello.com/).
+
+![Screenshot of the Trello board of Project Girl and Kitty](/src/assets/images/devops/trello.png)
+
+The first thing I needed was to install Linux on my machine.
+I knew that [Ubuntu Server](https://ubuntu.com/download/server) was a pretty widely used distribution for home servers, so I tried to install it.
+But it kept failing with a Python exception I think related to an old partition name in of the drives of the computer, even though I wiped it beforehand.
+
+After trying multiple times I gave up Ubuntu Server, and decided to try [Debian](https://www.debian.org/).
+Fortunately, it immediately worked, and I had a Linux installation working !
+
+I was then able to install a few packages, so that I could use `sudo` and `ssh`.
+
+Debian comes with an Apache install, and I wanted to check that port forwarding was working with it.
+I already had a domain name, so I hit one bird with two stones and directly put my computer's IP in my registrar after opening my port and checked if it was working.
+
+But here comes the start of the problems : my ISP, Salt, does not provide a public IPv4, which means that we couldn't access the server from an IPv4 only network.
+This can be the case if IPv6 is not enabled in the router settings or for example on 4G and 5G networks.
+But do you remember when I said that the WiFi of the school wasn't working ?
+Well, that means that everyone at school was using USB Tethering from their phone, via 4G or 5G.
+Meaning that my server wasn't accessible from the school.
+
+But luckily, there are some services that allow to act as a bridge between IPv4 networks and IPv6 ones.
+In my case, I added [Netiter's frontend](http://v4-frontend.netiter.com/) to my DNS records, and this allowed us to do HTTP and HTTPS requests to my server.
+The only downside is that any other ports than 80 and 443 (respectively HTTP and HTTPS) weren't forwarded.
+So I couldn't access the server via SSH on 4G.
+This wasn't too annoying since I could just configure the server from home, but it made troubleshooting a pain.
+
+## GitLab
+
+![Screenshot of GitLab](/src/assets/images/devops/gitlab.png)
+
+Now that the server was working, I could install GitLab.
+Luckily, this was very easy, as there is an official GitLab package on Debian.
+So all I had to do was to run these commands :
+
+```bash
+sudo apt-get update
+sudo apt-get install -y curl openssh-server ca-certificates perl postfix
+curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ee/script.deb.sh | sudo bash
+sudo EXTERNAL_URL="https://gitlab.stowy.ch" apt-get install gitlab-ee
+```
+
+The only annoying thing was that it was struggling to get certificates to be able to use HTTPS, so I had to use [Certbot](https://certbot.eff.org/) to manually generate them.
+
+After GitLab was installed, I created the repositories for each project and then created accounts for everyone.
+Unfortunately, Gmail blocked my server (probably to avoid spams), so no one received the mail from GitLab and I sent everyone a temporary password that they had to change.
+
+Now that the members of the team could access the repos, they had to clone them, but since the SSH port wasn't forwarded on an IPv4 network,
+we had to be careful to use the HTTPS link.
+
+Now that we had a git repository, we needed a way to make it work well with Unreal.
+My hope was to be able to use [Git LFS Locking](https://docs.gitlab.com/ee/user/project/file_lock.html) so that we could have a workflow that is similiar to using Perforce.
+After doing a bit of research, I found the plugin [Git LFS 2](https://github.com/ProjectBorealis/UEGitPlugin) that allows to lock and push files directly from Unreal.
+To add it to the project, I just had to copy its files to the `Plugin` folder.
+To be able to connect Unreal to Git, it required to setup Git Credential Manager with my server,
+so I had to create some tokens in the GitLab interface and then each member had to run these commands :
+
+```bash
+git config --global credential.https://gitlab.stowy.ch.gitLabDevClientId [client-id]
+git config --global credential.https://gitlab.stowy.ch.gitLabDevClientSecret [client-secret]
+git config --global credential.https://gitlab.stowy.ch.gitLabAuthModes browser
+git config --global credential.https://gitlab.stowy.ch.provider gitlab
+```
+
+And with all that, the Git setup was complete !
+
+## Nextcloud
+
+![Screenshot of Nextcloud](/src/assets/images/devops/nextcloud.png)
+
+After working a bit on the games, we realised that since the artists didn't have access to the projects and the repositories, it was difficult for them to send the finished assets.
+So to solve that, I decided to setup some kind of drive on my server.
+I had heard good things about [Nextcloud](https://nextcloud.com/), so I choose it for that task.
+
+### Switching GitLab to Apache
+
+But I had to solve another problem first.
+Since the server already had GitLab's [nginx](https://nginx.org/) running, I couldn't just add another web server.
+I needed a way to have my two subdomains (gitlab.stowy.ch and cloud.stowy.ch) answer with each applications.
+To do that, I had to disable the nginx that's bundled with GitLab and setup Apache to take its place.
+
+Disabling nginx was quite easy, it was just about switching a `true` to a `false`.
+
+```ruby
+nginx['enable'] = false
+```
+
+Then, configuring Apache was a bit harder, but most of the steps are explained in GitLab's documentation : https://docs.gitlab.com/omnibus/settings/nginx.html#using-a-non-bundled-web-server
+
+It took a bit of time to get the settings right, especially in regards to the SSL certificates, but I managed to do it.
+
+### Nextcloud Install
+
+Installing Nextcloud was pretty straightforward, the instructions on the [admin manual](https://docs.nextcloud.com/server/latest/admin_manual) are quite clear.
+However, as always, I wanted to do things in a strange way.
+My server has a pretty small SSD where the OS and the programs are installed (128 GB).
+So I wanted for the Nextcloud data (by that I mean the files of the users) to be on my HDD (1 TO).
+Unfortunately, I found out that moving the `data` folder isn't supported by Nextcloud.
+But I wanted to try anyway, so what I did is that I copied the `data` folder to my HDD and then created a symlink to it inside Nextcloud's folder.
+Luckily this worked, I assume because my data folder was still empty.
+
+## Perforce
+
+Although we had a somewhat working setup with Git, using it is not very user friendly for the artists and member of the Audio section.
+Furthermore, the Audio section received lessons from François Dumas which is the Audio Director of Ubisoft Annecy.
+In these lessons he showed them how to use WWise in conjunction with Perforce.
+This meant that it was necessary for the project to be on Perforce for them.
+It would also have avoided some issues with the Git LFS locking that wasn't working perfectly all the time.
+
+The WiFi was still not working at school, so I decided that I would install Perforce on my server.
+To do that, I was able to follow [Perforce's guide](https://www.perforce.com/manuals/p4sag/Content/P4SAG/chapter.install.html).
+However, I had to follow the non-package installation, since I couldn't install Ubuntu on my machine.
+This meant that the install was harder and that there was no service to auto boot Perforce at machine startup.
+
+After successfully performing the installation, I stumbled on a problem when trying to connect to the server from a 4G network.
+Since IPv4 frontend only forwarded web requests, it meant that the connections on the port 1666 from Perforce where ignored, meaning that it was impossible to use it.
+To try and circumvent this, I took my server and moved it to my dad's place, where we have a public IPv4 from Swisscom.
+But it also didn't work because the router block all incoming IPv4 and there is no way to prevent this.
+To make things worse, the public IPv4 can change, and so even if the firewall wasn't there, it wasn't really usable.
+
+When we thought we had lost all hope, the WiFi came back at school !
+We thought this meant that all of our problem where fixed, but we were quite naive.
+On the new network, IPv6 isn't enabled, the SSH port is blocked,
+so no one can clone SSH repos (not even on GitHub) and the school's server is on another sub-network, meaning that we cannot access it.
+
+After we had discovered this, we took the decision to just abandon the idea of using Perforce.
+
+## Backups
+
+To make sure we didn't lose all of our work if my server died, I made a script that backed up the files on Samuel's NAS.
+To do that, he created an account for me on his server, and I added my SSH keys so that I could connect to it without a password.
+This way, I could use `rsync` to send files though SSH in the script.
+
+The steps for the backup script are as follows :
+
+1. Create a folder in `/tmp` where the files will be copied
+2. Launch GitLab's backup command : `sudo gitlab-backup create`
+3. Copy it in the folder
+4. Copy every file in Nextcloud's `data` folder
+5. Compress the folder to a backup folder
+6. Send the backup to Sam's NAS
+7. Check if there are more than two old backups and if yes, delete the oldest
+
+I then added the script to a cronjob to be run each week.
+
+## Conclusion
+
+To conclude, we had a lot of problems, especially coming from the unfriendliness of my ISPs and the lack of WiFi at school,
+but I these tasks were the ones where I had the most fun.
+Nextcloud and GitLab worked well and we were still able to produce despite all the problems.

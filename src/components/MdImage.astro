@@ -1,0 +1,13 @@
+---
+const props = Astro.props;
+
+import { Image } from "astro:assets";
+
+const images = import.meta.glob<{ default: ImageMetadata }>(
+	"/src/assets/**/*.{jpeg,jpg,png,gif,avif,webp,svg}"
+);
+---
+
+<div data-lightbox="true">
+	<Image src={images[props.src]()} alt={props.alt} class={props.class} />
+</div>

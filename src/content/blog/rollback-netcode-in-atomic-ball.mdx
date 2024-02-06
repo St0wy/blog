@@ -1,0 +1,178 @@
+---
+title: Rollback Netcode in Atomic Ball
+slug: rollback-netcode-in-atomic-ball
+pubDatetime: 2022-10-31
+featured: false
+tags:
+    - netcode
+    - cpp
+    - english
+    - sae
+description: Technical post on how I used the Rollback engine of my teacher in the game Atomic Ball
+---
+
+During the Networking module of the SAE Institute, we had to create an online game using the
+[Rollback](https://en.wikipedia.org/wiki/Netcode#Rollback) network engine created by our teacher.
+
+## Atomic Ball
+
+The game I chose to make was one that my team made during the Swiss Game Academy 2019.
+
+![atomicBall2](/src/assets/images/atomic-ball-rollback/atomicBall2.png)
+
+The goal of the game is to pass a ball between the two players to be able to go forward.
+Doors fall from the top that you have to break to go through.
+To do that, you have to go through doors, but some require that you have the ball and for others, it's the opposite.
+
+<video width="640" height="480" loop muted autoplay>
+	<source src="/atomic-ball-rollback/atomicDemo.mp4" type="video/mp4"></source>
+	Your browser does not support the video tag.
+</video>
+
+This blog post is about the problems I had while making this game and the solutions I found.
+
+## The physics
+
+The first step of the project was to integrate our [physics engine](https://github.com/St0wy/GPR4400-PhysicsEngine) inside of the Rollback engine. For this, I removed the useless parts of mine and tried to keep it simple. The problem I had was that objects kept going inside of walls and then get stuck in them.
+
+The cause of this was that the response of the collisions would send the object inside the wall and once it would start to go out on the other side, it would be sent in the opposite direction, making the object stuck inside the wall.
+
+![BadPhysics](/src/assets/images/atomic-ball-rollback/BadPhysics.excalidraw.png)
+
+This is a weird problem since in my project with the original physics engine, the collision response has the correct orientation.
+
+The solution was then to swap some of the collision responses.
+
+```cpp
+Manifold CircleCollider::TestCollision(...) const
+{
+    // This gets the collision manifold between the two colliders and swaps it
+    return collider->TestCollision(colliderTransform, this, transform).Swaped();
+}
+
+Manifold CircleCollider::TestCollision(...) const
+{
+    return algo::FindCircleCircleManifold(this, transform, collider, circleTransform).Swaped();
+}
+```
+
+## Physics Layers
+
+In the game you need to be able to send the ball through the wall in the middle, while stopping the players to go through it. To do that, I implemented a layer system like in Unity.
+
+To do that, I first declared an enum that lists all of the game's layers.
+
+```cpp
+enum class Layer : std::uint8_t
+{
+    None = 0u,
+    Wall,
+    Door,
+    MiddleWall,
+    Player,
+    Ball,
+};
+```
+
+This is what is stored on the rigidbodies.
+
+Then I had to store how one layer can react to another layer. To do that I used bit-fields to reduce the amount of memory each information take, since I only need a "yes or no".
+
+```cpp
+struct LayerMask
+{
+    std::uint8_t player : 1 = 1u;
+    std::uint8_t wall : 1 = 1u;
+    std::uint8_t door : 1 = 1u;
+    std::uint8_t middleWall : 1 = 1u;
+    std::uint8_t ball : 1 = 1u;
+};
+```
+
+Then, each layer is represented using this Layer Mask inside the Layer Collision Matrix.
+
+```cpp
+struct LayerCollisionMatrix
+{
+    LayerMask player{};
+    LayerMask wall{};
+    LayerMask door{};
+    LayerMask middleWall{};
+    LayerMask ball{};
+
+    bool HasCollision(Layer layerOne, Layer layerTwo);
+};
+```
+
+I also have a method inside of it to know if one layer should collide with another.
+
+The matrix is then stored inside the Physics Manager, and the layers are checked before the test with the colliders.
+
+```cpp
+const Layer firstLayer = firstRigidbody.GetLayer();
+const Layer secondLayer = secondRigidbody.GetLayer();
+
+if (!_layerCollisionMatrix.HasCollision(firstLayer, secondLayer)) continue;
+```
+
+## The Falling Walls
+
+I had a hard time to conceptualize how I could represent the walls that fall down inside the ECS architecture of the project. At first I thought I could make the whole wall one entity that is drawn using two `sf::RectangleShapes`. But in the end, I thought it would be easier to have two entities.
+
+So the idea is that there is a first entity, the background wall, that is here to stop the players from going beyond. Its only particular component it the Falling Object component. This just makes an object fall down with a specified speed by lowering its position each tick.
+
+Then, there is the door, which also has the Falling Object component, but also a Falling Door component. This one stores the background wall and also whether the player should have the ball or not to cross the door. When a player has a collision with the door, if it meets the ball requirements, the door is destroyed along with the background wall.
+
+![FallingWalls](/src/assets/images/atomic-ball-rollback/FallingWalls.excalidraw.png)
+
+## Spawn of the falling walls
+
+We want the server to decide when and how a falling wall spawns. To do that, the server takes all the decisions and then sends them with a packet that asks the client to spawn the wall at a certain frame.
+
+This is what the packet looks like :
+
+```cpp
+struct SpawnFallingWallPacket final : TypedPacket<PacketType::SpawnFallingWall>
+{
+    std::array<std::uint8_t, sizeof(Frame)> spawnFrame{};
+    std::array<std::uint8_t, sizeof(float)> doorPosition{};
+    bool requiresBall{};
+};
+```
+
+The spawn procedure is as follows :
+
+At the start of the game, the server sends a packet to the clients with the spawn instructions. When they receive the packet, they store its information inside of a class called `FallingWallSpawnManager` that's inside the Rollback Manager.
+
+It looks like that :
+
+```cpp
+class FallingWallSpawnManager
+{
+public:
+    FallingWallSpawnManager(RollbackManager& rollbackManager, GameManager& gameManager);
+
+    void FixedUpdate();
+    void CopyAllComponents(const FallingWallSpawnManager& fallingWallSpawnManager);
+    void SpawnWall();
+
+    bool SetNextFallingWallSpawnInstructions(FallingWallSpawnInstructions fallingWallSpawnInstructions);
+
+    [[nodiscard]] FallingWallSpawnInstructions GetNextFallingWallSpawnInstructions() const;
+
+private:
+    FallingWallSpawnInstructions _nextFallingWallSpawnInstructions{};
+    bool _hasSpawned = true;
+
+    RollbackManager& _rollbackManager;
+    GameManager& _gameManager;
+};
+```
+
+The `FallingWallSpawnInstructions` is where the information sent by the packet is stored. In the fixed update, the code checks if the last validate frame is equal to the spawn frame and spawns the wall if yes.
+
+This setup, in theory, should work well. However, right now it causes desyncs if there's any delay between the client and the server. I don't know what causes it and the only option to play the game for now is through the debug.exe without any delay.
+
+## Conclusion
+
+To conclude, in this blog post I talked about how I integrated and fixed a bug in my physics engine, how I added layers to it using Bit-fields and how I implemented and spawned falling walls in a "Server authoritative" way.

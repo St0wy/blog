@@ -1,0 +1,155 @@
+---
+title: "Project VR Post-Mortem"
+slug: project-vr-post-mortem
+pubDatetime: 2024-02-09
+featured: false
+tags:
+    - post-mortem
+    - project-vr
+    - specialisation-projects
+    - english
+    - sae
+description: Post-Mortem of Project VR, a game made for the Specialisation Projects in the 3rd year at SAE Institute.
+---
+
+## Table of Contents
+
+## Context
+
+During the 3rd year of studies at SAE Institute, the Game Programming, Game Art and Audio Engineering students are tasked to make a game together. This year, it was a bit special, since we made two games instead of one. One of them is a puzzle adventure game where you play a girl and a cat solving puzzles in dreamlike worlds (Project Girl and Kitty). The other one is a VR game inspired by escape rooms where you have to solve puzzles to get out of a room with a dead body (Project VR). This document is only about Project VR.
+
+The pre-production was supposed to be from June 2023 to September 2023, but Project VR had delays that pushed it to October. The production of a vertical slice of the game lasted until February the 9th. The goal is not to have a full game, but to demonstrate a part of it with the quality pushed to the maximum.
+
+### Constraints and Pitch
+
+For this project, we had constraints imposed by our teacher, Elias Farhan. These where :
+
+-   Using Unreal Engine 5
+-   Making a VR game
+-   Start the project with the provided pitch
+
+The pitch was :
+
+> Project VR is a virtual reality puzzle game where the main character, in the midst of a hangover, must reconstruct the events of the previous day by solving puzzles in their closed apartment.
+
+### Team
+
+The team was split into three teams : Programming, Art and Audio. Each person also had a more specific role. For the artists, it was assigned by the teacher. As for the programmers, it appeared from the skills of each and everyone.
+
+The goal was for the audio team to be able to work on the game though a WWise session hosted on a perforce server. However, during the production, we weren’t able to set that up. Meaning that we couldn’t have help from the Audio section on this project.
+
+#### Stakeholders
+
+-   Elias Farhan (Head Game Programming)
+-   Nicolas Vallée (Head Game Art)
+-   Stéphane Chapelle (Head Audio)
+-   Nicolas Brière (Project Guidance)
+
+#### Programmers
+
+-   Samuel (Producer)
+-   Benjamin (Programmer and Game Designer)
+-   Edouard (Programmer and Game Designer)
+-   Fabian (Product Owner and SysAdmin)
+
+#### Artists
+
+-   Jessica (Lead Props / FX)
+-   Eliot (Lead UI)
+-   Jeremy (Lead R&D)
+-   Aliya (Lead Concepts / Character)
+-   Aurore (Lead Environnement / Animations / Intégration)
+
+## Project
+
+### Artistic Direction
+
+The artistic direction has a first proposal made by the Head of the Game Art section. Then, the students added more things to it.
+
+For the graphic style, it would be inspired by _Overwatch_, _Paladin_, _Dauntless_ and _Agents of Mayhem_. As for the palette and atmosphere, it is inspired by _Team Fortress 2_, _Sky: Children of the Light_ and _Ratchet & Clank_ and finally, for the environment, it is inspired by _NiBiRu: Age of Secrets_ and _Black Mirror_.
+
+![Concept art of Project VR](/src/assets/images/postmortem/concept_project_vr.png)
+
+### Production Tools
+
+The game is made on Unreal Engine 5. We mostly used blueprints, so we rarely had to use an IDE, but when we did, we used Visual Studio 2022. The project’s source was hosted on a Git repository located on a self-hosted GitLab instance. The assets were hosted on a Nextcloud instance. The hard-surface models were made using Maya or 3DS Max. As for the organic meshes, they were made on ZBrush. As for the texture, the artists used Substance Painter.
+
+### Organization
+
+At the start of the project, we received a production lesson from William Marié, a Producer at Old Skull Games. This is what guided us for the biggest part of our organization.
+
+There were two management roles in the group : Samuel as Producer and Fabian as Product Owner. As a Producer, Samuel’s role was to keep a good group dynamic. As for Fabian, his responsibility was to define what tasks (user stories) were to be done by the team for the following sprint. A sprint is a 2-week period where the team tries to do a set amount of work. Each task has an intensity attached to it. It is similar to the time it takes to do, but it is not exactly the same. This intensity is supposed to serve as a guide on if there was too much or too little work during the sprint. However, this metric hasn't been very useful on this project, since the amount of time everyone could put on the project varied frequently, and it was hard to estimate the duration of tasks that we never did before.
+
+At the end of each sprint, we did a Sprint Review / Sprint Planning / Sprint Retrospective (yes, all at the same time !). This is taken from the SCRUM method. The goal was for people to be able to tell their frustrations with the production and to improve things as they were advancing. We had to merge the three meetings into one, since there were very few moments where we could bring everyone together in the same room. Unfortunately, this was also not very effective, since the members of the team didn’t feel safe expressing their opinions in such a formal format.
+
+In parallel to the sprint reviews, we did weekly meetings on Fridays with Elias Farhan where we presented the work we did during the week. The goal of this meeting was mostly for Elias to see who did what and to raise red flags if he saw any. We could also ask him questions and guidance.
+
+### My Role
+
+In this project, I had two main roles : Product Owner (PO) and "DevOps" / SysAdmin.
+
+As a PO, my main tasks were defining the user stories of each sprint in the backlog and organizing sprint reviews at the end of each of them.
+I also had to update the asset lists when there where modifications and I kept the Trello board up to date.
+Since the sprint reviews where the moments where we could talk the most with the artists, I was the person that communicated with them the most.
+You can read more about this on my [blog post](../being-a-product-owner-on-project-vr).
+
+The DevOps part of my role was about setting up my home server with GitLab and Nextcloud.
+I also updated them regularly to make sure things went smoothly.
+Furthermore, I made a backup script that took all of the important data on the server and sent them to Sam's NAS.
+I also installed Perforce on the server, but it did not end up working.
+You can read more about this on my dedicated [blog post](../devops-in-specialisation-projects).
+
+I also did programming, but unfortunately, not as much as I wanted to.
+During the summer, I worked on the prototype for Girl and Kitty on Unity.
+I then did the first blocking for the office of Project VR.
+
+### Problems Encountered
+
+There where a lot of problems during this project.
+The first one we had was learning Unreal Engine 5.
+Before this project, we just had 6 hours of lessons on it one year prior.
+But the engine is very complex and hard to learn.
+This is made worse by the lackluster documentation of the engine.
+The constant crashes of the engine made it even harder.
+
+Another problem we had for multiple months was the absence of WiFi at school.
+This was particularly annoying because it meant everyone was using WiFi sharing on their phone.
+This meant that they could not connect to an IPv6 network which basically meant that it was impossible to use Perforce without some kind of connection at school.
+Since we had GitLab and Nextcloud, we could still work on the project.
+But it made impossible for the audio team to work directly on it.
+In the end, we decided that the audio would only work on Project Girl and Kitty and not on Project VR.
+
+I also had some motivations project, stemming from the fact that we had to work on two games instead of one.
+The previous years only had one 3rd year project and they had more time to do it.
+We had to make two games and in less time.
+Theoretically we were more students that the previous years, but the lack of motivations, problems and illnesses made it feel like we were less.
+
+It was also frustrating to work on a VR game, because it is not a type of game that I'm very passionate about.
+I only played two games before starting this project, and it made it had to find some kind of motivation to work on it.
+All of that made me feel like I was wasting my time.
+
+To make things even worse, my laptop died in December.
+I then lost one month with an incompetent repairman, so I switched to an old Linux laptop that could not run Unreal.
+I could still do my PO and DevOps tasks, but I couldn't program on Unreal at all.
+But then my second laptop died because of my own incompetence this time (pro tip : don't swap your SSD without unplugging your battery, you might drop your screws).
+To top it all of, the whole team got Covid at one point, which meant that we all lost one or two weeks of production.
+
+Apart from the "technical" problems, there were also communications problems.
+It first started with communication issues with the artists where they didn't feel heard when they gave feedback on the priority of some tasks.
+To try and solve these issues, we tried to do a meeting which ended up creating more tensions with my teachers this time.
+The culmination of all of this made me want to leave the school multiple time.
+I didn't because I need the bachelor.
+
+To try and solve the communications issues, I decided to resign from my PO role, especially when it comes to communicating with the artists, and I gave this role to Samuel.
+
+### What I Learned
+
+I didn't learn as much as I wanted on this project.
+The frustration and all of the problems made it had to see what could be learned.
+That being said, I did learn a lot about Unreal Engine 5.
+Unfortunately, I couldn't use C++, but I now know more about blueprints.
+I also learned a lot about the issues that can appear from trying to host something from a home network.
+
+## Conclusion
+
+This project was a really hard one. The problems piled up and it was really hard to advance. Although the end result is way below what we expected, I think we can still say that we did our best, despite the difficulties.
