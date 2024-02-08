@@ -51,14 +51,14 @@ I already had a domain name, so I hit one bird with two stones and directly put 
 But here comes the start of the problems : my ISP, Salt, does not provide a public IPv4, which means that we couldn't access the server from an IPv4 only network.
 This can be the case if IPv6 is not enabled in the router settings or for example on 4G and 5G networks.
 But do you remember when I said that the WiFi of the school wasn't working ?
-Well, that means that everyone at school was using USB Tethering from their phone, via 4G or 5G.
+Well, that means that everyone at school was using WiFi sharing from their phone, via 4G or 5G.
 Meaning that my server wasn't accessible from the school.
 
 But luckily, there are some services that allow to act as a bridge between IPv4 networks and IPv6 ones.
 In my case, I added [Netiter's frontend](http://v4-frontend.netiter.com/) to my DNS records, and this allowed us to do HTTP and HTTPS requests to my server.
 The only downside is that any other ports than 80 and 443 (respectively HTTP and HTTPS) weren't forwarded.
 So I couldn't access the server via SSH on 4G.
-This wasn't too annoying since I could just configure the server from home, but it made troubleshooting a pain.
+This wasn't too annoying since I could just configure the server from home, but it made troubleshooting at school a pain.
 
 ## GitLab
 
@@ -75,10 +75,10 @@ curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ee/script.de
 sudo EXTERNAL_URL="https://gitlab.stowy.ch" apt-get install gitlab-ee
 ```
 
-The only annoying thing was that it was struggling to get certificates to be able to use HTTPS, so I had to use [Certbot](https://certbot.eff.org/) to manually generate them.
+The only annoying thing was that I was struggling to get certificates so that we could use HTTPS, so I had to use [Certbot](https://certbot.eff.org/) to manually generate them.
 
 After GitLab was installed, I created the repositories for each project and then created accounts for everyone.
-Unfortunately, Gmail blocked my server (probably to avoid spams), so no one received the mail from GitLab and I sent everyone a temporary password that they had to change.
+Unfortunately, Gmail blocked my server (probably to avoid spams), so no one received the mail from GitLab. So I manually sent everyone a temporary password that they had to change.
 
 Now that the members of the team could access the repos, they had to clone them, but since the SSH port wasn't forwarded on an IPv4 network,
 we had to be careful to use the HTTPS link.
@@ -129,7 +129,7 @@ It took a bit of time to get the settings right, especially in regards to the SS
 Installing Nextcloud was pretty straightforward, the instructions on the [admin manual](https://docs.nextcloud.com/server/latest/admin_manual) are quite clear.
 However, as always, I wanted to do things in a strange way.
 My server has a pretty small SSD where the OS and the programs are installed (128 GB).
-So I wanted for the Nextcloud data (by that I mean the files of the users) to be on my HDD (1 TO).
+So I wanted for the Nextcloud data (by that I mean the files of the users) to be on my HDD (1 TB).
 Unfortunately, I found out that moving the `data` folder isn't supported by Nextcloud.
 But I wanted to try anyway, so what I did is that I copied the `data` folder to my HDD and then created a symlink to it inside Nextcloud's folder.
 Luckily this worked, I assume because my data folder was still empty.
@@ -153,10 +153,12 @@ To try and circumvent this, I took my server and moved it to my dad's place, whe
 But it also didn't work because the router block all incoming IPv4 and there is no way to prevent this.
 To make things worse, the public IPv4 can change, and so even if the firewall wasn't there, it wasn't really usable.
 
-When we thought we had lost all hope, the WiFi came back at school !
-We thought this meant that all of our problem where fixed, but we were quite naive.
-On the new network, IPv6 isn't enabled, the SSH port is blocked,
-so no one can clone SSH repos (not even on GitHub) and the school's server is on another sub-network, meaning that we cannot access it.
+When we thought we had lost all hope, the WiFi came back at school ! We
+thought this meant that all of our problem where fixed, but we were
+quite naive. On the new network, IPv6 wasn't enabled, the SSH port was
+blocked, so no one could clone SSH repos (not even on GitHub) and the
+school's server was on another sub-network, meaning that we couldn't access
+it.
 
 After we had discovered this, we took the decision to just abandon the idea of using Perforce.
 
@@ -181,5 +183,5 @@ I then added the script to a cronjob to be run each week.
 ## Conclusion
 
 To conclude, we had a lot of problems, especially coming from the unfriendliness of my ISPs and the lack of WiFi at school,
-but I these tasks were the ones where I had the most fun.
+but these tasks were the ones where I had the most fun.
 Nextcloud and GitLab worked well and we were still able to produce despite all the problems.
