@@ -9,6 +9,7 @@ import { slugifyStr } from "@utils/slugify";
 import ShareLinks from "@components/ShareLinks.astro";
 import { SITE } from "@config";
 import MdImage from "@components/MdImage.astro";
+import Comments from "@components/Comments.astro";
 
 export interface Props {
 	post: CollectionEntry<"blog">;
@@ -98,6 +99,7 @@ const layoutProps = {
 
 			<ShareLinks />
 		</div>
+		<Comments />
 	</main>
 	<Footer />
 </Layout>
